@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Examen de Práctica - Área 3</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; background: #f0f2f5; }
+        
+        /* Contenedor del PDF */
+        #pdf-container { width: 60%; height: 100%; border-right: 2px solid #ccc; }
+        iframe { width: 100%; height: 100%; border: none; }
+
+        /* Contenedor de la hoja de respuestas */
+        #ui-container { width: 40%; height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box; background: white; }
+        
+        .header { background: #003366; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; position: sticky; top: 0; z-index: 100; }
+        .timer { font-size: 1.2em; font-weight: bold; color: #ffcc00; }
+
+        .form-group { margin-bottom: 10px; }
+        input[type="text"] { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; }
+
+        .question-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .q-num { width: 40px; font-weight: bold; }
+        .options label { margin-right: 15px; cursor: pointer; }
+
+        #results { margin-top: 20px; padding: 20px; border: 2px solid #003366; border-radius: 8px; display: none; background: #eef; }
+        button { background: #28a745; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; font-size: 1.1em; cursor: pointer; margin-top: 20px; }
+        button:hover { background: #218838; }
+        
+        .subject-tag { font-size: 0.8em; color: #666; width: 100px; }
+    </style>
+</head>
+<body>
+
+<div id="pdf-container">
+    <iframe src="area3.pdf"></iframe>
+</div>
+
+<div id="ui-container">
+    <div class="header">
+        <h2>Hoja de Respuestas</h2>
+        <div class="timer">Tiempo restante: <span id="time">180:00</span></div>
+    </div>
+
+    <div class="form-group">
+        <label>Nombre Completo:</label>
+        <input type="text" id="nombre" placeholder="Juan Pérez">
+    </div>
+    <div class="form-group">
+        <label>Número de Cuenta:</label>
+        <input type="text" id="cuenta" placeholder="123456789">
+    </div>
+
+    <hr>
+
+    <div id="quiz-form"></div>
+
+    <button onclick="calificarExamen()">Finalizar y Calificar</button>
+
+    <div id="results"></div>
+</div>
+
+<script>
+    // Base de datos de respuestas y materias
+    const claves = {
+        1:"D", 2:"D", 3:"A", 4:"B", 5:"D", 6:"D", 7:"B", 8:"B", 9:"A", 10:"A", // Física
+        11:"C", 12:"B", 13:"B", 14:"C", 15:"B", 16:"C", 17:"B", 18:"C", 19:"C", 20:"C", // Literatura
+        21:"C", 22:"D", 23:"C", 24:"C", 25:"B", 26:"D", 27:"C", 28:"C", 29:"A", 30:"A", // Química
+        31:"C", 32:"B", 33:"D", 34:"A", 35:"D", 36:"C", 37:"C", 38:"B", 39:"A", 40:"C", // Geografía
+        41:"D", 42:"A", 43:"C", 44:"B", 45:"C", 46:"A", 47:"D", 48:"D", 49:"A", 50:"C", // Matemáticas
+        51:"B", 52:"D", 53:"B", 54:"B", 55:"D", 56:"A", 57:"C", 58:"A", 59:"A", 60:"C",
+        61:"A", 62:"C", 63:"B", 64:"D", 
+        65:"A", 66:"C", 67:"A", 68:"A", 69:"D", 70:"C", 71:"C", 72:"C", 73:"C", 74:"B", // Español
+        75:"B", 76:"D", 77:"D", 78:"A", 79:"B", 80:"B", 81:"B", 82:"B",
+        83:"D", 84:"C", 85:"D", 86:"A", 87:"D", 88:"B", 89:"A", 90:"B", 91:"C", 92:"D", // Biología
+        93:"C", 94:"A", 95:"A", 96:"C", 97:"C", 98:"A", 99:"A", 100:"B", 101:"C", 102:"C", // Historia Univ.
+        103:"A", 104:"A", 105:"B", 106:"C",
+        107:"B", 108:"A", 109:"C", 110:"C", 111:"D", 112:"C", 113:"D", 114:"A", 115:"B", // Historia Mex.
+        116:"A", 117:"A", 118:"A", 119:"D", 120:"D"
+    };
+
+    const materias = [
+        { nombre: "Física", rango: [1, 10] },
+        { nombre: "Literatura", rango: [11, 20] },
+        { nombre: "Química", rango: [21, 30] },
+        { nombre: "Geografía", rango: [31, 40] },
+        { nombre: "Matemáticas", rango: [41, 64] },
+        { nombre: "Español", rango: [65, 82] },
+        { nombre: "Biología", rango: [83, 92] },
+        { nombre: "Historia Universal", rango: [93, 106] },
+        { nombre: "Historia de México", rango: [107, 120] }
+    ];
+
+    // Generar la interfaz de preguntas
+    const container = document.getElementById('quiz-form');
+    for (let i = 1; i <= 120; i++) {
+        let materiaActual = materias.find(m => i >= m.rango[0] && i <= m.rango[1]).nombre;
+        const div = document.createElement('div');
+        div.className = 'question-row';
+        div.innerHTML = `
+            <span class="q-num">${i}</span>
+            <span class="subject-tag">${materiaActual}</span>
+            <div class="options">
+                ${['A','B','C','D'].map(opt => `
+                    <label><input type="radio" name="q${i}" value="${opt}"> ${opt}</label>
+                `).join('')}
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    // Lógica del Temporizador (180 min)
+    let totalSeconds = 180 * 60;
+    const timerDisplay = document.getElementById('time');
+    const countdown = setInterval(() => {
+        let minutes = Math.floor(totalSeconds / 60);
+        let seconds = totalSeconds % 60;
+        timerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        if (totalSeconds <= 0) {
+            clearInterval(countdown);
+            alert("¡Tiempo agotado!");
+            calificarExamen();
+        }
+        totalSeconds--;
+    }, 1000);
+
+    // Lógica de Calificación
+    function calificarExamen() {
+        const nombre = document.getElementById('nombre').value || "Aspirante";
+        const cuenta = document.getElementById('cuenta').value || "S/N";
+        let aciertosTotales = 0;
+        let reporteMaterias = "";
+
+        materias.forEach(m => {
+            let aciertosMateria = 0;
+            let totalMateria = (m.rango[1] - m.rango[0]) + 1;
+            
+            for (let i = m.rango[0]; i <= m.rango[1]; i++) {
+                const rta = document.querySelector(`input[name="q${i}"]:checked`);
+                if (rta && rta.value === claves[i]) {
+                    aciertosMateria++;
+                    aciertosTotales++;
+                }
+            }
+            reporteMaterias += `<p><strong>${m.nombre}:</strong> ${aciertosMateria} de ${totalMateria}</p>`;
+        });
+
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.style.display = "block";
+        resultsDiv.innerHTML = `
+            <h3>Resultado para: ${nombre}</h3>
+            <p>Cuenta: ${cuenta}</p>
+            <h1 style="color: #003366">Aciertos Totales: ${aciertosTotales} / 120</h1>
+            <hr>
+            <h4>Desglose por Materia:</h4>
+            ${reporteMaterias}
+            <button onclick="window.print()" style="background:#666">Imprimir Reporte</button>
+        `;
+        window.scrollTo(0, document.body.scrollHeight);
+        clearInterval(countdown);
+    }
+</script>
+
+</body>
+</html>
